@@ -1,0 +1,100 @@
+EXIT_SUCCESS = 0
+SYSEXIT = 1
+STDIN = 0
+STDOUT = 1
+SYSREAD = 3
+SYSWRITE = 4
+
+.bss
+
+len: .space 16        # bufor na ilosc elementow do wyswietlenie
+small_len: .space 16     # bufor na ilosc elementow do porownania
+
+buffor: .space 24000   # bufor przechowujacy dane wejsciowe
+buffor_len = . - buffor   # dlugosc tego bufora
+
+
+.text
+.global _start
+
+_start:
+
+#read
+        mov $SYSREAD, %eax   # wywloanie funkcji systemowej do odczyyu
+        mov $STDIN, %ebx      # wrzucenie do ebx strumienia wejsciowego
+        mov $buffor, %ecx    # wrzucenie tego bufora do ecx
+        mov $buffor_len, %edx   # wrzucenie dlugfosci bufora do edx
+        INT $0x80    # wywolanie ,przerwania
+
+        mov %eax, len        # wrzuc eax do bufora do wyswietlania ilosci elementow
+        shr $3, %eax  # przesuniecie logiczne w prawo o 3 to samo co dzielenie przez 8
+        dec %eax  # zmniejsz od jeszcze o 1 bo robimy od 0 (nie pewne)
+		
+		# jezeli masz np 5 pakietow 1 z 2  2 z 3 3 z 4 4 z 5 
+        mov %eax, small_len    # wrzuc zawartosc eax do small_len (ilosc elementow do porownywania)
+        mov $0, %edx   # wyzeruj edx  (bo bedzeimy go potem uzywac ?)
+
+loop1:
+        push %rdx   # wsadz na stos rdx bo 64 bit akurat
+        mov $0, %ecx   # wyzeruj ecx bo bedzie na stos potrzebny w petli do while
+        mov $buffor, %edi   # wrzucenie tego bufora do edi
+
+
+loop2:
+        push %rcx    # wrzuc na stos rcx
+        mov $0, %esi   # wyzeruj esi
+        mov (%edi, %esi, 4), %eax     #
+        inc %esi
+        mov (%edi, %esi, 4), %ebx
+        inc %esi
+        mov (%edi, %esi, 4), %ecx
+        inc %esi
+        mov (%edi, %esi, 4), %edx
+
+        cmp %eax, %ecx
+        ja go  # jezeli ecx jest wieksze od eax
+        jb remake  # jezeli ecx mniejsze od eax to remake 
+
+        cmp %ebx, %edx
+        ja go  # jezeli edx jest wieksze od ebx
+
+remake:
+        xchg %ebx, %edx   # wymien zawartosc miedzy soba (zeby posortowac rosnaca)  drugiej czesci liczby
+        xchg %eax, %ecx   # Wymien zawartosc miedzy soba  (zeby posortowac rosnaca)  pierwszej czesci liczby
+
+        mov $0, %esi  # wyzeruj esi
+        mov %eax, (%edi, %esi, 4)     # wrzuc zawartosc eax do edi odpowiednio dobierajac pozycje 
+        inc %esi
+        mov %ebx, (%edi, %esi, 4)
+        inc %esi
+        mov %ecx, (%edi, %esi, 4)
+        inc %esi
+        mov %edx, (%edi, %esi, 4)
+
+go:
+        add $8, %edi       # dodanie 8 do edi bo trzeba porownac pakiet 1 i 2 potem 2 i 3 i tak dalej i tak do gory
+        pop %rcx			# zrzuc ze stosu rcx
+        inc %ecx			# dodaj 1 do rejestru ecx
+        cmp small_len, %ecx		# porownanie ilosci pakietow elementow z 
+        jl loop2    # jesli ecx jest mniejsze od small|_len
+
+        pop %rdx
+        inc %edx
+        cmp small_len, %edx
+        jl loop1
+
+#write
+        mov $SYSWRITE, %eax
+        mov $STDOUT, %ebx
+        mov $buffor, %ecx
+        mov $len, %edx
+        int $0x80
+
+#exit
+        movl $SYSEXIT, %eax
+        movl $EXIT_SUCCESS, %ebx
+        int $0x80
+
+
+
+
